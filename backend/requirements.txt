@@ -1,6 +1,6 @@
 fastapi
-uvicorn[standard]
-pydantic
+uvicorn
 pandas
+python-multipart
 pytest
 httpx

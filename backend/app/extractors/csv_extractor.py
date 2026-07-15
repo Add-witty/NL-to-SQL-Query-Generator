@@ -1,53 +1,77 @@
-from pathlib import Path
-from typing import Union
+"""
+CSV Schema Extractor.
+
+Reads a single CSV file and infers a Schema (one Table) from its
+header and column dtypes. CSV files carry no primary/foreign key
+metadata, so those fields are intentionally left as False / empty
+rather than guessed - we never invent constraints that aren't in
+the source data.
+"""
+
+import io
+import re
+from typing import BinaryIO, Union
 
 import pandas as pd
 
-from app.extractors.base import BaseSchemaExtractor
-from app.models.schema import Column, Schema, SourceType, Table
+from app.models.schema import Column, Schema, Table
 
+# Map pandas dtypes to a small, generic set of SQL-ish types.
+# Anything unrecognized falls back to TEXT rather than raising,
+# since column typing should never block schema extraction.
 _DTYPE_MAP = {
-    "int64": "integer",
-    "float64": "float",
-    "bool": "boolean",
-    "object": "text",
-    "datetime64[ns]": "datetime",
+    "int64": "INTEGER",
+    "int32": "INTEGER",
+    "float64": "FLOAT",
+    "float32": "FLOAT",
+    "bool": "BOOLEAN",
+    "datetime64[ns]": "DATETIME",
+    "object": "TEXT",
 }
 
 
-class CSVSchemaExtractor(BaseSchemaExtractor):
+def sanitize_table_name(filename: str) -> str:
+    """Derive a safe SQL-identifier-like table name from a filename."""
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    stem = stem.strip().replace(" ", "_")
+    sanitized = re.sub(r"[^A-Za-z0-9_]", "_", stem)
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+
+    if not sanitized:
+        sanitized = "uploaded_table"
+    if sanitized[0].isdigit():
+        sanitized = f"table_{sanitized}"
+
+    return sanitized
+
+
+def _map_dtype(dtype) -> str:
+    return _DTYPE_MAP.get(str(dtype), "TEXT")
+
+
+def extract_schema_from_csv(
+    file_obj: Union[BinaryIO, io.BytesIO], table_name: str
+) -> Schema:
     """
-    Extracts a single-table Schema from a CSV file (see
-    supported_format.md: "CSV - Single table").
+    Parse a CSV file-like object and return a Schema with a single Table.
 
-    CSV files carry no primary/foreign key metadata, so every column
-    is extracted with is_primary_key=False and is_foreign_key=False.
-    Data types are inferred from the pandas dtype of each column.
+    Raises ValueError on empty files or unparseable CSV content, so the
+    API layer can translate that into a clean 400 response.
     """
+    try:
+        df = pd.read_csv(file_obj)
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError("The CSV file is empty or has no columns.") from exc
+    except pd.errors.ParserError as exc:
+        raise ValueError(f"Could not parse CSV file: {exc}") from exc
 
-    def extract(self, source: Union[str, Path]) -> Schema:
-        path = Path(source)
+    if len(df.columns) == 0:
+        raise ValueError("The CSV file has no columns.")
 
-        if not path.exists():
-            raise FileNotFoundError(f"CSV file not found: {path}")
+    columns = [
+        Column(name=str(col), data_type=_map_dtype(df[col].dtype))
+        for col in df.columns
+    ]
 
-        if path.suffix.lower() != ".csv":
-            raise ValueError(f"Expected a .csv file, got: {path.suffix}")
-
-        dataframe = pd.read_csv(path)
-
-        columns = [
-            Column(
-                name=column_name,
-                data_type=self._map_dtype(dataframe[column_name].dtype),
-            )
-            for column_name in dataframe.columns
-        ]
-
-        table = Table(name=path.stem, columns=columns)
-
-        return Schema(source_type=SourceType.CSV, tables=[table])
-
-    @staticmethod
-    def _map_dtype(dtype) -> str:
-        return _DTYPE_MAP.get(str(dtype), "text")
+    table = Table(name=table_name, columns=columns, foreign_keys=[])
+    return Schema(source_type="csv", tables=[table])

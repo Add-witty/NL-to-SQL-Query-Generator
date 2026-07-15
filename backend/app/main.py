@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 
-from app.config import settings
-from app.routers import health
+from app.api.upload import router as upload_router
 
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.version,
-)
+app = FastAPI(title="Natural Language to SQL Generator")
 
-app.include_router(health.router)
+app.include_router(upload_router)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
