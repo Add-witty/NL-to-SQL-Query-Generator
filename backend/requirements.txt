@@ -1,6 +1,6 @@
 fastapi
+uvicorn[standard]
 pydantic
 pandas
-openpyxl
-sqlalchemy
 pytest
+httpx

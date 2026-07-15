@@ -1,67 +1,47 @@
-"""
-Internal Schema model.
-
-This is the single, source-agnostic representation produced by every
-schema extractor (CSV, XLSX, SQLite, SQL dump). Downstream modules
-(Prompt Builder, Validator, LLM Service) depend only on this model and
-never on the original file format.
-
-See decisions.md: "Use a single internal Schema model regardless of
-input source."
-"""
-
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field
-
-
-class DataType(str, Enum):
-    """Normalized data types, independent of source-specific type systems."""
-
-    INTEGER = "INTEGER"
-    FLOAT = "FLOAT"
-    BOOLEAN = "BOOLEAN"
-    DATETIME = "DATETIME"
-    TEXT = "TEXT"
-    UNKNOWN = "UNKNOWN"
+from pydantic import BaseModel
 
 
 class SourceType(str, Enum):
-    """Where the schema was extracted from."""
+    """Origin of the extracted schema."""
 
-    CSV = "CSV"
-    XLSX = "XLSX"
-    SQLITE = "SQLITE"
-    SQL = "SQL"
+    CSV = "csv"
+    XLSX = "xlsx"
+    SQLITE = "sqlite"
+    SQL = "sql"
+
+
+class ForeignKeyReference(BaseModel):
+    """Points to the table/column a foreign key references."""
+
+    table: str
+    column: str
 
 
 class Column(BaseModel):
-    """A single column within a table."""
-
     name: str
-    data_type: DataType
+    data_type: str
     is_primary_key: bool = False
     is_foreign_key: bool = False
-    references: Optional[str] = Field(
-        default=None,
-        description=(
-            "For foreign key columns, the referenced table/column, "
-            "e.g. 'orders.id'. None if not a foreign key or if the "
-            "source format cannot express relationships (e.g. CSV)."
-        ),
-    )
+    references: Optional[ForeignKeyReference] = None
 
 
 class Table(BaseModel):
-    """A single table, made up of columns."""
-
     name: str
-    columns: list[Column]
+    columns: List[Column]
 
 
 class Schema(BaseModel):
-    """The full extracted schema for one uploaded source."""
+    """
+    Single internal representation produced by every schema extractor
+    (CSV, XLSX, SQLite, SQL), regardless of input source.
+
+    See decisions.md: "Use a single internal Schema model regardless
+    of input source" so the Prompt Builder and Validator stay
+    independent of how the schema was originally obtained.
+    """
 
     source_type: SourceType
-    tables: list[Table]
+    tables: List[Table]
