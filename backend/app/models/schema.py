@@ -28,9 +28,12 @@ class Column(BaseModel):
     references: Optional[ForeignKeyReference] = None
 
 
+from pydantic import BaseModel, Field
+
 class Table(BaseModel):
     name: str
     columns: List[Column]
+    foreign_keys: List[ForeignKeyReference] = Field(default_factory=list)
 
 
 class Schema(BaseModel):

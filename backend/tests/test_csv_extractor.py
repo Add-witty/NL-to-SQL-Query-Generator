@@ -43,10 +43,10 @@ def test_extract_infers_column_names_and_types(sample_csv):
     schema = extractor.extract(sample_csv)
     columns = {col.name: col.data_type for col in schema.tables[0].columns}
 
-    assert columns["id"] == "integer"
-    assert columns["name"] == "text"
-    assert columns["balance"] == "float"
-    assert columns["is_active"] == "boolean"
+    assert columns["id"] == "INTEGER"
+    assert columns["name"] == "TEXT"
+    assert columns["balance"] == "FLOAT"
+    assert columns["is_active"] == "BOOLEAN"
 
 
 def test_extract_columns_have_no_key_metadata(sample_csv):

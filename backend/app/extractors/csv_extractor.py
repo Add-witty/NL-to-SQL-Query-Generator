@@ -10,10 +10,12 @@ the source data.
 
 import io
 import re
+from pathlib import Path
 from typing import BinaryIO, Union
 
 import pandas as pd
 
+from app.extractors.base import BaseSchemaExtractor
 from app.models.schema import Column, Schema, Table
 
 # Map pandas dtypes to a small, generic set of SQL-ish types.
@@ -75,3 +77,16 @@ def extract_schema_from_csv(
 
     table = Table(name=table_name, columns=columns, foreign_keys=[])
     return Schema(source_type="csv", tables=[table])
+
+
+class CSVSchemaExtractor(BaseSchemaExtractor):
+    def extract(self, source: Union[str, Path]) -> Schema:
+        file_path = Path(source)
+
+        if file_path.suffix.lower() != ".csv":
+            raise ValueError("Only .csv files are supported by this extractor.")
+        if not file_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {source}")
+
+        with file_path.open("rb") as file_obj:
+            return extract_schema_from_csv(file_obj, sanitize_table_name(file_path.name))

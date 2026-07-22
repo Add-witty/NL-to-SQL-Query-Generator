@@ -80,16 +80,8 @@ These can be added later without breaking existing extractors.
 
 ### Decision
 
-The `POST /upload` endpoint reads the entire uploaded file into memory and parses it synchronously with `pandas.read_csv`, capped at a 10MB file size limit. File type is validated by extension (`.csv`), not by the client-supplied `Content-Type` header.
+Introduce a dedicated `FileValidator` service, separate from the schema extractors, and a shared exception hierarchy (`FileValidationError` and subclasses, `SchemaExtractionError`) raised by services rather than HTTPException.
 
-### Reason
+Reason
 
-This keeps the endpoint stateless and simple for the MVP (consistent with the "stateless MVP" decision above): no temp files, no streaming parser. `Content-Type` from browsers/clients is unreliable for CSV, so the extension check is the primary gate; actual parseability is still verified by pandas and surfaced as a 400 on failure. The 10MB cap bounds memory usage until a streaming or chunked-upload approach is needed for larger files.
-
-### Decision
-
-CSV-derived schemas never set `is_primary_key=True` or populate `foreign_keys`, even heuristically (e.g. a column named `id`).
-
-### Reason
-
-CSV files carry no real constraint metadata. Guessing keys from naming conventions risks the LLM later generating SQL (e.g. JOINs) based on a relationship that doesn't actually exist. This is consistent with the project's "never invent columns or table names" rule extended to constraints.
+Keeps upload routers limited to request/response handling and HTTP status mapping, as required by the coding guidelines. Validation logic (filename present, extension allowed, content not empty) is reusable across future extractors (XLSX, SQLite, SQL) without duplicating checks in each router. Routers catch the domain exceptions and translate them to HTTP status codes (400 for validation failures, 422 for parse/extraction failures), keeping business logic and HTTP concerns fully decoupled.
